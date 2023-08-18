@@ -137,7 +137,11 @@ def edf2bids( physio_edf, skip_eye_events=False ):
                         gaze_with_sacc = samples.gx_left[int(ind_s):int(ind_e)]
                     ind_bs = gaze_with_sacc[gaze_with_sacc==100000000.0].first_valid_index()
                     ind_be = gaze_with_sacc[gaze_with_sacc==100000000.0].last_valid_index()
-                    samples.blink[int(ind_bs):int(ind_be)]=1
+                    # import pdb; pdb.set_trace()
+                    if ind_bs is not None and ind_be is not None:
+                        samples.blink[int(ind_bs):int(ind_be or -1)]=1
+                    else:
+                        print(f"Found blink with start={ind_bs} and end={ind_be}")
 
         optional_columns = ["fixation", "saccade", "blink"]
         column_list.extend(optional_columns)
@@ -170,7 +174,7 @@ def edf2bids( physio_edf, skip_eye_events=False ):
     
     # Define neuralstarttime and physiostartime as the first trigger time and first sample time, respectively.
     signal_labels = [l.lower() for l in physio.labels()]
-    
+    import pdb; pdb.set_trace()
     if 'trigger' in signal_labels:
         physio.digitize_trigger()
         nstarttime = physio.get_trigger_timing()[0]
