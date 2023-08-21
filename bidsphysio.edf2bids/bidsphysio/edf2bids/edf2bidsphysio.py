@@ -174,7 +174,7 @@ def edf2bids( physio_edf, skip_eye_events=False ):
     
     # Define neuralstarttime and physiostartime as the first trigger time and first sample time, respectively.
     signal_labels = [l.lower() for l in physio.labels()]
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     if 'trigger' in signal_labels:
         physio.digitize_trigger()
         nstarttime = physio.get_trigger_timing()[0]
@@ -183,14 +183,14 @@ def edf2bids( physio_edf, skip_eye_events=False ):
             p_signal.neuralstarttime = nstarttime
             p_signal.physiostartime = pstartime
             # we also fill with NaNs the places for which there is missing data:
-            p_signal.plug_missing_data()
+            p_signal.plug_missing_data() 
     else:
         print('No trigger channel was found')
 
     return physio
 
 def edfevents2bids(physio_edf):
-    """Reads the EDF file and saves the task events in a EventData member. Task events are the string messages that the user sends to the eyetracker to identify experimenta conditions.
+    """Reads the EDF file and saves the task events in a EventData member. Task events are the string messages that the user sends to the eyetracker to identify experimental conditions.
         
     Parameters
     ----------
@@ -212,11 +212,10 @@ def edfevents2bids(physio_edf):
         EventIdentifiers.append(sm)
     
     # Read the EDF data into three pandas dataframes including the messages
-    # TODO: delete the unecessary columns?
-    all_messages = pd.DataFrame()
-    for tm in EventIdentifiers:
-        samples, events, messages = edf.pread(physio_edf, trial_marker = tm)
-        all_messages = all_messages.append(messages, ignore_index = True)
+    samples, events, all_messages = edf.pread(physio_edf, trial_marker=b'')
+
+
+
 
     if all_messages.empty:
         event = []
@@ -307,7 +306,7 @@ def main():
     odir = os.path.dirname(args.bidsprefix)
     if not os.path.exists(odir):
         os.makedirs(odir)
-    
+    import pdb;pdb.set_trace()
     physio_data = edf2bids( args.infile, args.skip_eye_events )
     event_data = edfevents2bids ( args.infile )
 

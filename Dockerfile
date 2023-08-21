@@ -6,7 +6,7 @@
 ########################################################
 
 ARG DEBIAN_VERSION=buster
-ARG BASE_PYTHON_VERSION=3.8
+ARG BASE_PYTHON_VERSION=3.9
 # (don't use simply PYTHON_VERSION because it's an env variable)
 
 # Use an official Python runtime as a parent image
@@ -84,10 +84,22 @@ RUN pip install pydicom==1.4.1 \
 ### copy module:
 ENV INSTALL_FOLDER=/src/bidsphysio
 COPY . ${INSTALL_FOLDER}
+
+
 # Installing in the first place all the subpackages from source ensures that
 # they take precedence over versions in PyPI:
-RUN pip install ${INSTALL_FOLDER}/bidsphysio.* \
-    && pip install ${INSTALL_FOLDER}
+#RUN pip install ${INSTALL_FOLDER}/bidsphysio.* \
+   # && pip install ${INSTALL_FOLDER}
+RUN pip install ${INSTALL_FOLDER}/bidsphysio.acq2bids \
+    && pip install ${INSTALL_FOLDER}/bidsphysio.base \
+    && pip install ${INSTALL_FOLDER}/bidsphysio.dcm2bids \
+    && pip install ${INSTALL_FOLDER}/bidsphysio.edf2bids \
+    && pip install ${INSTALL_FOLDER}/bidsphysio.events \
+    && pip install ${INSTALL_FOLDER}/bidsphysio.physio2bids \
+    && pip install ${INSTALL_FOLDER}/bidsphysio.pmu2bids \
+    && pip install ${INSTALL_FOLDER}/bidsphysio.session 
+    
+    #&& pip install ${INSTALL_FOLDER}
 
 ENTRYPOINT ["/bin/bash"]
 
