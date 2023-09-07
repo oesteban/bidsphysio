@@ -69,7 +69,7 @@ def find_line_with_string(input_text, input_string):
     return found_line
 
 
-def edf2bids(physio_edf, skip_eye_events=False):
+def edf2bids(physio_edf,path_metadata ,skip_eye_events=False):
     """Reads the EDF file and saves the continuous eye movement data in a PhysioData member
 
     Parameters
@@ -103,11 +103,21 @@ def edf2bids(physio_edf, skip_eye_events=False):
     RECCFG_line = find_line_with_string(message, b"RECCFG")
     sampling_frequency = message[RECCFG_line].split()[2].decode("utf-8")
     which_eye = message[RECCFG_line].split()[5].decode("utf-8")
+    ELCL_PROC_line= find_line_with_string(message, b"ELCL_PROC")
+    pupil_fit_method = "ellipse" if "ELLIPSE" in message[ELCL_PROC_line].split()[1].decode("utf-8").upper() else "center-of-mass"
+    print('pupil fit method',pupil_fit_method)
+    threshold_line= find_line_with_string(message, b"THRESHOLDS")
+    pupil_threshold=message[threshold_line].split()[2].decode("utf-8")
+    CR_threshold=message[threshold_line].split()[3].decode("utf-8")
+    print('thresholds',pupil_threshold,CR_threshold)
+    eye_tracking_method= "P-CR"if "CR" in message[RECCFG_line].split()[1].decode("utf-8") else message[RECCFG_line].split()[1].decode("utf-8")
+    print(eye_tracking_method)
 
     # Define columns to save: We are saving gaze, pupil area size, trigger, and optionally fixations, saccades and blinks but we can modify it to include head reference coordinates, velocities etc.
     samples = samples.rename(columns={"input": "trigger"})
     # TODO: Rename other columns?
     if which_eye == "R\x00":
+        samples=samples.rename(columns={"samples": "eye_timestamp","gx_right": "eye1_x_coordinate", "gy_right": "eye1_y_coordinate", "pa_right": "eye1_pupil_size"}, errors="raise")
         column_list = [
             "eye_timestamp",
             "eye1_x_coordinate",
@@ -117,6 +127,7 @@ def edf2bids(physio_edf, skip_eye_events=False):
         ]
         recorded_eye = "Right"
     elif which_eye == "L\x00":
+        samples = samples.rename(columns={"samples": "eye_timestamp","gx_left": "eye1_x_coordinate", "gy_left": "eye1_y_coordinate", "pa_left": "eye1_pupil_size"})
         column_list = [
             "eye_timestamp",
             "eye1_x_coordinate",
@@ -126,6 +137,7 @@ def edf2bids(physio_edf, skip_eye_events=False):
         ]
         recorded_eye = "Left"
     elif which_eye == "LR\x00":
+        samples = samples.rename(columns={"samples": "eye_timestamp","gx_left": "eye1_x_coordinate", "gy_left": "eye1_y_coordinate", "pa_left": "eye1_pupil_size","gx_right": "eye2_x_coordinate", "gy_right": "eye2_y_coordinate", "pa_right": "eye2_pupil_size"})
         column_list = [
             "eye_timestamp",
             "eye1_x_coordinate",
@@ -145,17 +157,15 @@ def edf2bids(physio_edf, skip_eye_events=False):
         samples["blink"] = 0
 
         for ind, value in enumerate(events.type):
-            ind_s = samples[samples["samples"] == events.start[ind]].index.values
-            ind_e = samples[samples["samples"] == events.end[ind]].index.values
+            ind_s = samples[samples["eye_timestamp"] == events.start[ind]].index.values
+            ind_e = samples[samples["eye_timestamp"] == events.end[ind]].index.values
             if value == "fixation":
                 samples.fixation[int(ind_s) : int(ind_e)] = 1
             if value == "saccade":
                 samples.saccade[int(ind_s) : int(ind_e)] = 1
                 if events.blink[ind] == True:
                     if which_eye == "R\x00":
-                        gaze_with_sacc = samples.gx_right[int(ind_s) : int(ind_e)]
-                    else:
-                        gaze_with_sacc = samples.gx_left[int(ind_s) : int(ind_e)]
+                        gaze_with_sacc = samples.eye1_x_coordinate[int(ind_s) : int(ind_e)]
                     ind_bs = gaze_with_sacc[
                         gaze_with_sacc == 100000000.0
                     ].first_valid_index()
@@ -197,6 +207,13 @@ def edf2bids(physio_edf, skip_eye_events=False):
 
     # Add "RecordedEye" as an attribute to the physio object so as to save it in the .json file
     setattr(physio, "RecordedEye", recorded_eye)
+    setattr(physio, "EyeTrackingMethod", eye_tracking_method)
+    setattr(physio, "PupilFitMethod", pupil_fit_method)
+    setattr(physio, "CRThreshold", CR_threshold)
+    setattr(physio, "PThreshold", pupil_threshold)
+    setattr(physio,"MetadataJson",path_metadata)
+    print("path metadata",path_metadata)
+
 
     # Define neuralstarttime and physiostartime as the first trigger time and first sample time, respectively.
     signal_labels = [l.lower() for l in physio.labels()]
@@ -246,7 +263,8 @@ def edfevents2bids(physio_edf):
         event = []
         print("No task events were found")
     else:
-        all_messages = all_messages.dropna(subset=["trialid"])
+        all_messages = all_messages.dropna(subset=["trialid "])
+
         # Create a new column to hold the original samples
         all_messages["sample"] = all_messages["trialid_time"]
         all_messages["sample"] = all_messages["sample"].apply(np.int64)
@@ -336,6 +354,9 @@ def main():
         "-i", "--infile", required=True, help="SR research eye tracker EDF file"
     )
     parser.add_argument(
+        "-m", "--metadata", required=True, help="path to json file with metadata of the eyetracking experiment"
+    )
+    parser.add_argument(
         "-b",
         "--bidsprefix",
         required=True,
@@ -357,10 +378,7 @@ def main():
     odir = os.path.dirname(args.bidsprefix)
     if not os.path.exists(odir):
         os.makedirs(odir)
-    import pdb
-
-    pdb.set_trace()
-    physio_data = edf2bids(args.infile, args.skip_eye_events)
+    physio_data = edf2bids(args.infile,args.metadata, args.skip_eye_events)
     event_data = edfevents2bids(args.infile)
 
     signal_labels = [l.lower() for l in physio_data.labels()]

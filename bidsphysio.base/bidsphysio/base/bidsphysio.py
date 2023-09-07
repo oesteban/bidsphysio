@@ -42,7 +42,7 @@ SOFTWARE.
 """
 
 import json
-
+from pathlib import Path
 import numpy as np
 
 
@@ -279,6 +279,7 @@ class PhysioData(object):
         json_fName = json_fName + '_physio.json'
 
         if not hasattr(self, 'RecordedEye'):
+
             with open( json_fName, 'w') as f:
                 json.dump({
                     "SamplingFrequency": self.signals[0].samples_per_second,
@@ -292,22 +293,31 @@ class PhysioData(object):
                     }
                 }, f, sort_keys = True, indent = 4, ensure_ascii = False)
                 f.write('\n')
-        else: # Eyetracking data case
-            with open( json_fName, 'w') as f:
-                json.dump({
-                    "SamplingFrequency": self.signals[0].samples_per_second,
-                    "StartTime": self.signals[0].t_start(),
-                    "RecordedEye": self.RecordedEye,
-                    "Columns": [item.label for item in self.signals],
-                    **{           # this syntax allows us to add the elements of this dictionary to the one we are creating
-                        item.label: {
-                          "Units": item.units
-                        }
-                        for item in self.signals if item.units != ""
-                    }
-                }, f, sort_keys = True, indent = 4, ensure_ascii = False)
-                f.write('\n')
+                print('loop')
+                f.write('normal physio')
+        else:  # Eyetracking data case
 
+            with open(self.MetadataJson, 'r') as source_file:
+                METADATA_JSON_BOILERPLATE = json.load(source_file)
+
+            # Create a dictionary containing both sets of data
+            combined_data = METADATA_JSON_BOILERPLATE.copy()
+
+            # Fill in the specific fields from ET_metadata
+            combined_data["SamplingFrequency"] = self.signals[0].samples_per_second
+            combined_data["StartTime"] = self.signals[0].t_start()
+            combined_data["RecordedEye"] = self.RecordedEye
+            combined_data["EyeTrackingMethod"] = self.EyeTrackingMethod
+            combined_data["PupilFitMethod"] = self.PupilFitMethod
+            combined_data["GazeMappingSettings"]={
+                "CRThreshold": f"{self.CRThreshold}",
+                "PThreshold": f"{self.PThreshold}"
+            }
+            combined_data["Columns"] = [item.label for item in self.signals]
+
+            # Save the combined data as JSON
+            Path(json_fName).write_text(json.dumps(combined_data, indent=4))
+                    
     def save_bids_data(self, data_fName):
         """
         Saves the PhysioData signal to the BIDS .tsv.gz file.
