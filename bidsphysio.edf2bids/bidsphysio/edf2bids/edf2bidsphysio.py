@@ -112,6 +112,7 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
     threshold_line = find_line_with_string(message, b"THRESHOLDS")
     pupil_threshold = message[threshold_line].split()[2].decode("utf-8")
     CR_threshold = message[threshold_line].split()[3].decode("utf-8")
+    print(CR_threshold, "cr_threshold")
     eye_tracking_method = (
         "P-CR"
         if "CR" in message[RECCFG_line].split()[1].decode("utf-8")
@@ -238,13 +239,17 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
             )
 
     # Add "RecordedEye" as an attribute to the physio object so as to save it in the .json file
-    setattr(physio, "RecordedEye", recorded_eye)
-    setattr(physio, "EyeTrackingMethod", eye_tracking_method)
-    setattr(physio, "PupilFitMethod", pupil_fit_method)
-    setattr(physio, "CRThreshold", CR_threshold)
-    setattr(physio, "PThreshold", pupil_threshold)
-    setattr(physio, "MetadataJson", path_metadata)
-    print("path metadata", path_metadata)
+    attributes_new = {
+        "RecordedEye": recorded_eye,
+        "EyeTrackingMethod": eye_tracking_method,
+        "PupilFitMethod": pupil_fit_method,
+        "CRThreshold": CR_threshold,
+        "PThreshold": pupil_threshold,
+        "MetadataJson": path_metadata,
+    }
+
+    for attr, value in attributes_new.items():
+        setattr(physio, attr, value)
 
     # Define neuralstarttime and physiostartime as the first trigger time and first sample time, respectively.
     signal_labels = [l.lower() for l in physio.labels()]
@@ -421,26 +426,9 @@ def main():
     else:
         physio_data.save_to_bids(args.bidsprefix)
 
-    if event_data:
-        if os.path.exists(
-            args.bidsprefix + "_events.tsv"
-        ):  # If file already exists, see if it has onset and duration entries
-            pre_file = pd.read_csv(args.bidsprefix + "_events.tsv", sep="\t")
-            if (
-                pre_file.columns[0] == "onset" and pre_file.columns[1] == "duration"
-            ):  # check for a valid BIDS events file
-                setattr(
-                    event_data, "Eyetracker", "eyetracker"
-                )  # so as to know that these task events are from the eyetracker
-                event_data.append_events_bids_data(
-                    args.bidsprefix
-                )  # append the new data and order by "onset" and save
-            else:
-                print("Task events file already exists and is not a valid BIDS file")
-        else:  # else just save the data
-            event_data.save_events_bids_data(args.bidsprefix)
-    else:
-        print("No task events were found")
+    event_data.save_events_bids_data(
+        args.bidsprefix + "bidsphysio"
+    )  # Since we already have a more precise event file, we output this one only for checks.
 
 
 # This is the standard boilerplate that calls the main() function.
