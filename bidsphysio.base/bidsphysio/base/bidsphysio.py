@@ -276,13 +276,13 @@ class PhysioData(object):
             and len(np.unique([item.t_start() for item in self.signals])) == 1
         ), "The different signals have different sampling rates. You can't save them in a single file!"
 
-        # make sure the file name ends with "_physio.json" by removing it (if present)
-        #   and adding it back:
+        # make sure the file name does not end with "_physio.json" by removing it (if present)
+        #   and not adding it back:
         for myStr in [".json", "_physio"]:
             json_fName = (
                 json_fName[: -len(myStr)] if json_fName.endswith(myStr) else json_fName
             )
-        json_fName = json_fName + "_physio.json"
+        json_fName = json_fName + ".json"
 
         if not hasattr(self, "RecordedEye"):
 
@@ -340,12 +340,12 @@ class PhysioData(object):
             len(np.unique([item.samples_count for item in self.signals])) == 1
         ), "The different signals have different number of samples. You can't save them in a single file!"
 
-        # make sure the file name ends with "_physio.tsv.gz":
+        # make sure the file name does not end with "_physio.tsv.gz":
         for myStr in [".gz", ".tsv", "_physio"]:
             if data_fName.endswith(myStr):
                 data_fName = data_fName[: -len(myStr)]
 
-        data_fName = data_fName + "_physio.tsv.gz"
+        data_fName = data_fName + ".tsv.gz"
 
         # Save the data:
         if not hasattr(self, "RecordedEye"):
@@ -353,14 +353,19 @@ class PhysioData(object):
             myFmt = [
                 "% 1d" if item.label == "trigger" else "%.4f" for item in self.signals
             ]
-        else:  # Eyetracking data case
+        else:
+            '''# Eyetracking data case
             myFmt = [
                 "% d"
                 if item.label in {"trigger", "fixation", "saccade", "blink", "samples"}
                 else "%.1f"
                 for item in self.signals
             ]
-
+            '''
+            myFmt = [
+                "%s"
+                for item in self.signals
+            ]
         np.savetxt(
             data_fName,
             np.transpose([item.signal for item in self.signals]),
@@ -396,7 +401,7 @@ class PhysioData(object):
 
         if hasattr(self, "RecordedEye"):
             # eyetracking case
-            rec_fName = "{0}_recording-eyetracking_physio".format(self.bidsPrefix)
+            rec_fName = "{0}_eyetrack".format(self.bidsPrefix)
             print("Saving eyetracking physio data")
             self.save_bids_json(rec_fName)
             self.save_bids_data(rec_fName)
@@ -570,7 +575,7 @@ class PhysioData(object):
             ###   Get filename   ###
             if hasattr(self, "RecordedEye"):
                 # eyetracking case
-                rec_fName = "{0}_recording-eyetracking_physio".format(self.bidsPrefix)
+                rec_fName = "{0}_eyetrack".format(self.bidsPrefix)
                 print("Saving eyetracking physio data")
                 self.save_bids_json(rec_fName)
                 self.save_bids_data(rec_fName)

@@ -112,7 +112,7 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
     threshold_line = find_line_with_string(message, b"THRESHOLDS")
     pupil_threshold = message[threshold_line].split()[2].decode("utf-8")
     CR_threshold = message[threshold_line].split()[3].decode("utf-8")
-    print(CR_threshold, "cr_threshold")
+    CR_threshold = CR_threshold.replace('\u0000', '')
     eye_tracking_method = (
         "P-CR"
         if "CR" in message[RECCFG_line].split()[1].decode("utf-8")
@@ -221,7 +221,7 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
         indc = np.where(column_list[wc] == samples.columns)[0]
         physio_label = samples.columns[indc][0]
         s = samples[samples.columns[indc][0]].values.tolist()
-
+        samples.replace(100000000.0, "n/a", inplace=True)
         if not (
             (samples[samples.columns[indc][0]] == 0.0).all()
             or (samples[samples.columns[indc][0]] == 127.0).all()
