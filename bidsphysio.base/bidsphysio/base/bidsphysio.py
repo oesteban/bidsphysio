@@ -323,7 +323,15 @@ class PhysioData(object):
                 "CRThreshold": f"{self.CRThreshold}",
                 "PThreshold": f"{self.PThreshold}",
             }
+            combined_data["CalibrationCount"]=self.CalibrationCount
+            combined_data["StartTime"]=self.StartTime
+            combined_data["StopTime"] = self.StopTime
             combined_data["Columns"] = [item.label for item in self.signals]
+            if hasattr(self,"CalibrationType"):
+                combined_data["CalibrationType"] = self.CalibrationType
+                combined_data["CalibrationPosition"] = self.CalibrationPosition
+                combined_data["AverageCalibrationError"] = self.AverageCalibrationError
+                combined_data["MaximalCalibrationError"] = self.MaximalCalibrationError
 
             # Save the combined data as JSON
             Path(json_fName).write_text(json.dumps(combined_data, indent=4))
@@ -371,6 +379,7 @@ class PhysioData(object):
             np.transpose([item.signal for item in self.signals]),
             fmt=myFmt,
             delimiter="\t",
+
         )
 
     def save_to_bids(self, bids_fName=None):

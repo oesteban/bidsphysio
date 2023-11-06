@@ -61,11 +61,13 @@ from bidsphysio.events.eventsbase import EventSignal, EventData
 
 # Function to find the a particular line in a raw edf file's messages
 def find_line_with_string(input_text, input_string):
-    # returns only the last line containing the input string
+    # returns only the first line containing the input string
     for line in range(len(input_text)):
         if input_string in input_text[line]:
             found_line = line
-
+            break
+        else:
+            found_line = None
     return found_line
 
 
@@ -100,6 +102,30 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
 
     # Find sampling frequency and which eye was recorded from messages
     message = edfread.read_messages(physio_edf)
+
+    #detect if calibration is in the messages:
+    line_calibration=find_line_with_string(message,b"CALIBRATION (")
+    line_error = find_line_with_string(message, b"ERROR")
+    stop_time=samples['samples'].values.tolist()[-1]
+    start_time=samples['samples'].values.tolist()[0]
+    if (line_calibration is not None) and (line_error is not None):
+        line_error=find_line_with_string(message, b"ERROR")
+        average_calibration_error=message[line_error].split()[7].decode("utf-8")
+        max_calibration_error=message[line_error].split()[9].decode("utf-8")
+
+        calibration_count = 1
+        if 'HV9' in message[line_calibration].decode("utf-8").upper():
+            calibration_type='HV9'
+            calibration_position='[[400,300],[400,51],[400,549],[48,300],[752,300],[48,51],[752,51],[48,549],[752,549]]'
+        else:
+            pass
+
+    else:
+        print('No calibration data')
+        calibration_count = 0
+
+
+
     RECCFG_line = find_line_with_string(message, b"RECCFG")
     sampling_frequency = message[RECCFG_line].split()[2].decode("utf-8")
     which_eye = message[RECCFG_line].split()[5].decode("utf-8")
@@ -221,7 +247,7 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
         indc = np.where(column_list[wc] == samples.columns)[0]
         physio_label = samples.columns[indc][0]
         s = samples[samples.columns[indc][0]].values.tolist()
-        samples.replace(100000000.0, "n/a", inplace=True)
+
         if not (
             (samples[samples.columns[indc][0]] == 0.0).all()
             or (samples[samples.columns[indc][0]] == 127.0).all()
@@ -239,14 +265,37 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
             )
 
     # Add "RecordedEye" as an attribute to the physio object so as to save it in the .json file
-    attributes_new = {
-        "RecordedEye": recorded_eye,
-        "EyeTrackingMethod": eye_tracking_method,
-        "PupilFitMethod": pupil_fit_method,
-        "CRThreshold": CR_threshold,
-        "PThreshold": pupil_threshold,
-        "MetadataJson": path_metadata,
-    }
+    if calibration_count==0:
+        attributes_new = {
+            "RecordedEye": recorded_eye,
+            "EyeTrackingMethod": eye_tracking_method,
+            "PupilFitMethod": pupil_fit_method,
+            "CRThreshold": CR_threshold,
+            "PThreshold": pupil_threshold,
+            "MetadataJson": path_metadata,
+            "CalibrationCount":calibration_count,
+            "StartTime":start_time,
+            "StopTime":stop_time,
+        }
+    else:
+        attributes_new = {
+            "RecordedEye": recorded_eye,
+            "EyeTrackingMethod": eye_tracking_method,
+            "PupilFitMethod": pupil_fit_method,
+            "CRThreshold": CR_threshold,
+            "PThreshold": pupil_threshold,
+            "MetadataJson": path_metadata,
+            "CalibrationCount":calibration_count,
+            "CalibrationType":calibration_type,
+            "CalibrationPosition":calibration_position,
+            "AverageCalibrationError":average_calibration_error,
+            "MaximalCalibrationError":max_calibration_error,
+            "StartTime": start_time,
+            "StopTime": stop_time,
+        }
+
+
+
 
     for attr, value in attributes_new.items():
         setattr(physio, attr, value)
@@ -427,8 +476,8 @@ def main():
         physio_data.save_to_bids(args.bidsprefix)
 
     event_data.save_events_bids_data(
-        args.bidsprefix + "bidsphysio"
-    )  # Since we already have a more precise event file, we output this one only for checks.
+        args.bidsprefix + "_recording_eyetrack_stim"
+    )  
 
 
 # This is the standard boilerplate that calls the main() function.
