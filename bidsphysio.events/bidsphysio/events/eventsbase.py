@@ -119,7 +119,7 @@ class EventData(object):
         for myStr in ['.gz','.tsv','_bold','_events']:
             if data_fName.endswith( myStr ):
                 data_fName = data_fName[:-len(myStr)]
-        data_fName = data_fName + '.tsv.gz'
+        data_fName = data_fName + '.tsv'
         
         
 

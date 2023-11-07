@@ -46,6 +46,7 @@ from pathlib import Path
 import numpy as np
 
 
+
 class PhysioSignal(object):
     """
     Individual physiology signal (e.g., pulse, respiration, etc.)
@@ -327,6 +328,7 @@ class PhysioData(object):
             combined_data["StartTime"]=self.StartTime
             combined_data["StopTime"] = self.StopTime
             combined_data["Columns"] = [item.label for item in self.signals]
+            combined_data["EDFHeader"] = self.EDFHeader
             if hasattr(self,"CalibrationType"):
                 combined_data["CalibrationType"] = self.CalibrationType
                 combined_data["CalibrationPosition"] = self.CalibrationPosition

@@ -50,6 +50,7 @@ import os
 import sys
 import numpy as np
 import pandas as pd
+import re
 
 pd.options.mode.chained_assignment = None
 
@@ -103,6 +104,14 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
     # Find sampling frequency and which eye was recorded from messages
     message = edfread.read_messages(physio_edf)
 
+    line_end_header=find_line_with_string(message,b"!MODE RECORD")
+
+
+    cleaned_header = [line.decode('utf-8', errors='ignore').strip(' \n\x00') for line in message[0:line_end_header] if line]
+    cleaned_header = [re.sub(r'\s{5,}', '    ', line) for line in cleaned_header]
+    EDFHeader = '[' + ', '.join(map(repr, cleaned_header)) + ']'
+
+
     #detect if calibration is in the messages:
     line_calibration=find_line_with_string(message,b"CALIBRATION (")
     line_error = find_line_with_string(message, b"ERROR")
@@ -121,7 +130,6 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
             pass
 
     else:
-        print('No calibration data')
         calibration_count = 0
 
 
@@ -276,6 +284,7 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
             "CalibrationCount":calibration_count,
             "StartTime":start_time,
             "StopTime":stop_time,
+            "EDFHeader":EDFHeader,
         }
     else:
         attributes_new = {
@@ -292,6 +301,7 @@ def edf2bids(physio_edf, path_metadata, skip_eye_events=False):
             "MaximalCalibrationError":max_calibration_error,
             "StartTime": start_time,
             "StopTime": stop_time,
+            "EDFHeader": EDFHeader,
         }
 
 
@@ -333,6 +343,7 @@ def edfevents2bids(physio_edf):
 
     # Read messages sent to the eyetracker
     message = edfread.read_messages(physio_edf)
+
     MR_line = find_line_with_string(
         message, b"!MODE RECORD"
     )  # sent messages appear after line of "MODE RECORD"
@@ -476,7 +487,7 @@ def main():
         physio_data.save_to_bids(args.bidsprefix)
 
     event_data.save_events_bids_data(
-        args.bidsprefix + "_recording_eyetrack_stim"
+        args.bidsprefix + "_eventlist_raw"
     )  
 
 
