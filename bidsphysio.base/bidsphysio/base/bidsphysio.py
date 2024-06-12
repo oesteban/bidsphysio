@@ -42,8 +42,9 @@ SOFTWARE.
 """
 
 import json
-
+from pathlib import Path
 import numpy as np
+
 
 
 class PhysioSignal(object):
@@ -76,16 +77,16 @@ class PhysioSignal(object):
     """
 
     def __init__(
-            self,
-            label=None,
-            uuid=None,
-            units="",
-            samples_per_second=None,
-            sampling_times=[],
-            physiostarttime=0,
-            neuralstarttime=0,
-            signal=[]
-            ):
+        self,
+        label=None,
+        uuid=None,
+        units="",
+        samples_per_second=None,
+        sampling_times=[],
+        physiostarttime=0,
+        neuralstarttime=0,
+        signal=[],
+    ):
         self.label = label
         self.uuid = uuid
         self.units = units
@@ -94,7 +95,7 @@ class PhysioSignal(object):
         self.physiostarttime = physiostarttime
         self.neuralstarttime = neuralstarttime
         self.signal = signal
-        self.samples_count = len( signal ) if signal is not [] else None
+        self.samples_count = len(signal) if signal is not [] else None
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -102,28 +103,31 @@ class PhysioSignal(object):
         else:
             return False
 
-    def t_start( self ):
+    def t_start(self):
         """
         Computes the BIDS t_start (offset between the beginning of the neural signal and the beginning
         of the physiological recording), in seconds
         I round it to the ms
         """
         try:
-            t_start_ms = 1000*(self.physiostarttime - self.neuralstarttime)
+            t_start_ms = 1000 * (self.physiostarttime - self.neuralstarttime)
             # round to the ms:
             return int(t_start_ms) / 1000
         except ValueError:
             pass
 
-    def calculate_timing( self ):
+    def calculate_timing(self):
         """
         Calculate the recording timing, based on the physiostarttime
         and the sampling rate
         """
         if self.samples_per_second is None or self.physiostarttime is None:
-            raise ValueError('Unable to calculate the recording timing')
+            raise ValueError("Unable to calculate the recording timing")
         else:
-            self.sampling_times = [self.physiostarttime + i/self.samples_per_second for i in range(len(self.signal))]
+            self.sampling_times = [
+                self.physiostarttime + i / self.samples_per_second
+                for i in range(len(self.signal))
+            ]
 
     def calculate_trigger_events(self, t_trig):
         """
@@ -139,10 +143,10 @@ class PhysioSignal(object):
                 return None
 
         sampling_times = np.array(self.sampling_times)
-        trig_signal = np.full( np.shape(self.signal), False )    # initialize to "False"
+        trig_signal = np.full(np.shape(self.signal), False)  # initialize to "False"
         for t in t_trig:
             if self.sampling_times[0] <= t <= self.sampling_times[-1]:
-                trig_signal[np.argmax( sampling_times >= t )] = True
+                trig_signal[np.argmax(sampling_times >= t)] = True
         return trig_signal
 
     def plug_missing_data(self, missing_value=np.nan):
@@ -152,27 +156,31 @@ class PhysioSignal(object):
         """
 
         # The time increment between samples:
-        dt = 1/self.samples_per_second
+        dt = 1 / self.samples_per_second
 
         # The following finds the first index for which the difference between
         #   consecutive elements is larger than dt (plus a small rounding error)
         # (argmax stops at the first "True"; if it doesn't find any, it returns 0):
-        i = np.argmax( np.ediff1d(self.sampling_times) > dt*(1.001) )
+        i = np.argmax(np.ediff1d(self.sampling_times) > dt * (1.001))
         while i != 0:
             # new time array, which adds the missing timepoint:
             self.sampling_times = np.concatenate(
                 # Note: np.concatenate takes a list as argument, so you need (...)
-                (self.sampling_times[:i+1], [self.sampling_times[i]+dt], self.sampling_times[i+1:])
+                (
+                    self.sampling_times[: i + 1],
+                    [self.sampling_times[i] + dt],
+                    self.sampling_times[i + 1 :],
+                )
             )
             # new signal array, which adds a "missing_value" at the missing timepoint:
             self.signal = np.concatenate(
                 # Note: np.concatenate takes a list as argument, so you need (...)
-                (self.signal[:i+1], [missing_value], self.signal[i+1:])
+                (self.signal[: i + 1], [missing_value], self.signal[i + 1 :])
             )
             # check to see if we are done:
-            i = np.argmax( np.ediff1d(self.sampling_times) > dt*(1.001) )
+            i = np.argmax(np.ediff1d(self.sampling_times) > dt * (1.001))
 
-        self.samples_count = len( self.signal )
+        self.samples_count = len(self.signal)
 
     @classmethod
     def matching_trigger_signal(cls, mysignal, trigger_s):
@@ -181,32 +189,27 @@ class PhysioSignal(object):
         with 'signal' the trigger_s
         """
 
-        assert (
-            isinstance(mysignal, cls)
-        ), "You can only add PhysioSignals to PhysioData"
+        assert isinstance(mysignal, cls), "You can only add PhysioSignals to PhysioData"
 
         return cls(
-                   label='trigger',
-                   signal=trigger_s,
-                   samples_per_second=mysignal.samples_per_second,
-                   sampling_times=mysignal.sampling_times,
-                   physiostarttime=mysignal.physiostarttime,
-                   neuralstarttime=mysignal.neuralstarttime
-               )
+            label="trigger",
+            signal=trigger_s,
+            samples_per_second=mysignal.samples_per_second,
+            sampling_times=mysignal.sampling_times,
+            physiostarttime=mysignal.physiostarttime,
+            neuralstarttime=mysignal.neuralstarttime,
+        )
 
 
 ####################
+
 
 class PhysioData(object):
     """
     List of physiological signals. It has its own methods to write to file
     """
 
-    def __init__(
-            self,
-            signals = None,
-            bidsPrefix = None
-            ):
+    def __init__(self, signals=None, bidsPrefix=None):
         self.signals = signals if signals is not None else []
         self.bidsPrefix = bidsPrefix
 
@@ -220,7 +223,7 @@ class PhysioData(object):
         """
         Returns a list with the labels of all the object signals
         """
-        return [ item.label for item in self.signals ]
+        return [item.label for item in self.signals]
 
     def get_trigger_physiosignal(self):
         """
@@ -230,18 +233,18 @@ class PhysioData(object):
         signal_labels = [l.lower() for l in self.labels()]
 
         # physiosignal object corresponding to the trigger:
-        return self.signals[signal_labels.index('trigger')]
+        return self.signals[signal_labels.index("trigger")]
 
     def append_signal(self, signal):
         """
         Appends a new signal to the signals list
         """
-        assert (
-            isinstance(signal, PhysioSignal)
+        assert isinstance(
+            signal, PhysioSignal
         ), "You can only add PhysioSignals to PhysioData"
 
-        if hasattr(self,'signals'):
-            self.signals.append( signal )
+        if hasattr(self, "signals"):
+            self.signals.append(signal)
         else:
             self.signals = [signal]
 
@@ -253,8 +256,10 @@ class PhysioData(object):
         # remove '_bold.nii(.gz)' or '_physio' if present **at the end of the bidsPrefix**
         # (This is a little convoluted, but we make sure we don't delete it if
         #  it happens in the middle of the string)
-        for mystr in ['.gz', '.nii', '_bold', '_physio']:
-            bidsPrefix = bidsPrefix[:-len(mystr)] if bidsPrefix.endswith(mystr) else bidsPrefix
+        for mystr in [".gz", ".nii", "_bold", "_physio"]:
+            bidsPrefix = (
+                bidsPrefix[: -len(mystr)] if bidsPrefix.endswith(mystr) else bidsPrefix
+            )
 
         # Whatever is left, we assign to the bidsPrefix class attribute:
         self.bidsPrefix = bidsPrefix
@@ -268,45 +273,70 @@ class PhysioData(object):
         """
 
         assert (
-            len( np.unique([item.samples_per_second for item in self.signals]) ) == 1 and
-            len( np.unique([item.t_start()          for item in self.signals]) ) == 1
-        ),"The different signals have different sampling rates. You can't save them in a single file!"
+            len(np.unique([item.samples_per_second for item in self.signals])) == 1
+            and len(np.unique([item.t_start() for item in self.signals])) == 1
+        ), "The different signals have different sampling rates. You can't save them in a single file!"
 
-        # make sure the file name ends with "_physio.json" by removing it (if present)
-        #   and adding it back:
-        for myStr in ['.json','_physio']:
-            json_fName = json_fName[:-len(myStr)] if json_fName.endswith( myStr ) else json_fName
-        json_fName = json_fName + '_physio.json'
+        # make sure the file name does not end with "_physio.json" by removing it (if present)
+        #   and not adding it back:
+        for myStr in [".json", "_physio"]:
+            json_fName = (
+                json_fName[: -len(myStr)] if json_fName.endswith(myStr) else json_fName
+            )
+        json_fName = json_fName + ".json"
 
-        if not hasattr(self, 'RecordedEye'):
-            with open( json_fName, 'w') as f:
-                json.dump({
-                    "SamplingFrequency": self.signals[0].samples_per_second,
-                    "StartTime": self.signals[0].t_start(),
-                    "Columns": [item.label for item in self.signals],
-                    **{            # this syntax allows us to add the elements of this dictionary to the one we are creating
-                        item.label: {
-                            "Units": item.units
-                        }
-                        for item in self.signals if item.units != ""
-                    }
-                }, f, sort_keys = True, indent = 4, ensure_ascii = False)
-                f.write('\n')
-        else: # Eyetracking data case
-            with open( json_fName, 'w') as f:
-                json.dump({
-                    "SamplingFrequency": self.signals[0].samples_per_second,
-                    "StartTime": self.signals[0].t_start(),
-                    "RecordedEye": self.RecordedEye,
-                    "Columns": [item.label for item in self.signals],
-                    **{           # this syntax allows us to add the elements of this dictionary to the one we are creating
-                        item.label: {
-                          "Units": item.units
-                        }
-                        for item in self.signals if item.units != ""
-                    }
-                }, f, sort_keys = True, indent = 4, ensure_ascii = False)
-                f.write('\n')
+        if not hasattr(self, "RecordedEye"):
+
+            with open(json_fName, "w") as f:
+                json.dump(
+                    {
+                        "SamplingFrequency": self.signals[0].samples_per_second,
+                        "StartTime": self.signals[0].t_start(),
+                        "Columns": [item.label for item in self.signals],
+                        **{  # this syntax allows us to add the elements of this dictionary to the one we are creating
+                            item.label: {"Units": item.units}
+                            for item in self.signals
+                            if item.units != ""
+                        },
+                    },
+                    f,
+                    sort_keys=True,
+                    indent=4,
+                    ensure_ascii=False,
+                )
+                print("loop")
+                f.write("normal physio")
+        else:  # Eyetracking data case
+
+            with open(self.MetadataJson, "r") as source_file:
+                METADATA_JSON_BOILERPLATE = json.load(source_file)
+
+            # Create a dictionary containing both sets of data
+            combined_data = METADATA_JSON_BOILERPLATE.copy()
+
+            # Fill in the specific fields from ET_metadata
+            combined_data["SamplingFrequency"] = self.signals[0].samples_per_second
+            combined_data["StartTime"] = self.signals[0].t_start()
+            combined_data["RecordedEye"] = self.RecordedEye
+            combined_data["EyeTrackingMethod"] = self.EyeTrackingMethod
+            combined_data["PupilFitMethod"] = self.PupilFitMethod
+            combined_data["GazeMappingSettings"] = {
+                "CRThreshold": f"{self.CRThreshold}",
+                "PThreshold": f"{self.PThreshold}",
+            }
+            combined_data["CalibrationCount"]=self.CalibrationCount
+            combined_data["StartTime"]=self.StartTime
+            combined_data["StopTime"] = self.StopTime
+            combined_data["Columns"] = [item.label for item in self.signals]
+            combined_data["EDFHeader"] = self.EDFHeader
+            if hasattr(self,"CalibrationType"):
+                combined_data["CalibrationType"] = self.CalibrationType
+                combined_data["CalibrationPosition"] = self.CalibrationPosition
+                combined_data["AverageCalibrationError"] = self.AverageCalibrationError
+                combined_data["MaximalCalibrationError"] = self.MaximalCalibrationError
+
+            # Save the combined data as JSON
+            Path(json_fName).write_text(json.dumps(combined_data, indent=4))
 
     def save_bids_data(self, data_fName):
         """
@@ -317,28 +347,41 @@ class PhysioData(object):
         """
 
         assert (
-            len( np.unique([item.samples_count for item in self.signals]) ) == 1
-        ),"The different signals have different number of samples. You can't save them in a single file!"
+            len(np.unique([item.samples_count for item in self.signals])) == 1
+        ), "The different signals have different number of samples. You can't save them in a single file!"
 
-        # make sure the file name ends with "_physio.tsv.gz":
-        for myStr in ['.gz','.tsv','_physio']:
-            if data_fName.endswith( myStr ):
-                data_fName = data_fName[:-len(myStr)]
-        
-        data_fName = data_fName + '_physio.tsv.gz'
+        # make sure the file name does not end with "_physio.tsv.gz":
+        for myStr in [".gz", ".tsv", "_physio"]:
+            if data_fName.endswith(myStr):
+                data_fName = data_fName[: -len(myStr)]
+
+        data_fName = data_fName + ".tsv.gz"
 
         # Save the data:
-        if not hasattr(self, 'RecordedEye'):
+        if not hasattr(self, "RecordedEye"):
             # Format: 4 decimals in general, unsigned integer if 'trigger':
-            myFmt=['% 1d' if item.label == 'trigger' else '%.4f' for item in self.signals]
-        else: # Eyetracking data case
-            myFmt=['% d' if item.label in {'trigger','fixation', 'saccade', 'blink', 'samples'} else '%.1f' for item in self.signals]
-        
+            myFmt = [
+                "% 1d" if item.label == "trigger" else "%.4f" for item in self.signals
+            ]
+        else:
+            '''# Eyetracking data case
+            myFmt = [
+                "% d"
+                if item.label in {"trigger", "fixation", "saccade", "blink", "samples"}
+                else "%.1f"
+                for item in self.signals
+            ]
+            '''
+            myFmt = [
+                "%s"
+                for item in self.signals
+            ]
         np.savetxt(
             data_fName,
-            np.transpose( [item.signal for item in self.signals] ),
+            np.transpose([item.signal for item in self.signals]),
             fmt=myFmt,
-            delimiter='\t'
+            delimiter="\t",
+
         )
 
     def save_to_bids(self, bids_fName=None):
@@ -356,49 +399,54 @@ class PhysioData(object):
             # for this instance of the class. If neither of them is
             # present, return an error:
             if not self.bidsPrefix:
-                raise Exception('fileName was not a known provided')
+                raise Exception("fileName was not a known provided")
 
         # find the unique pairs of sampling rate and t_start (and indices):
         unique_sr_ts, idx_un = np.unique(
-                                   [ [item.samples_per_second,item.t_start()] for item in self.signals ],
-                                   axis=0,
-                                   return_index=True
-                               )
+            [[item.samples_per_second, item.t_start()] for item in self.signals],
+            axis=0,
+            return_index=True,
+        )
 
-        print('')
-        
-        if hasattr(self, 'RecordedEye'):
-            #eyetracking case
-            rec_fName = '{0}_recording-eyetracking_physio'.format(self.bidsPrefix)
-            print('Saving eyetracking physio data')
+        print("")
+
+        if hasattr(self, "RecordedEye"):
+            # eyetracking case
+            rec_fName = "{0}_eyetrack".format(self.bidsPrefix)
+            print("Saving eyetracking physio data")
             self.save_bids_json(rec_fName)
             self.save_bids_data(rec_fName)
-                
+
         elif len(unique_sr_ts) == 1:
             # All the physio signals have the same sampling rate and t_start, so
             #   there will be just one _physio file and we don't need to add "_recording-"
 
-            print('Saving physio data')
+            print("Saving physio data")
             self.save_bids_json(self.bidsPrefix)
             self.save_bids_data(self.bidsPrefix)
 
         else:
 
-            for idx, [sr,ts] in enumerate( unique_sr_ts ):
+            for idx, [sr, ts] in enumerate(unique_sr_ts):
                 rec_label = self.signals[idx_un[idx]].label
 
-                rec_fName = '{0}_recording-{1}_physio'.format(self.bidsPrefix, rec_label)
+                rec_fName = "{0}_recording-{1}_physio".format(
+                    self.bidsPrefix, rec_label
+                )
                 # create a new PhysioData object with just the signals with matching sampling rate and t_start:
                 hola = PhysioData(
-                           [ item for item in self.signals if item.samples_per_second == sr and
-                                                              item.t_start() == ts ]
-                       )
+                    [
+                        item
+                        for item in self.signals
+                        if item.samples_per_second == sr and item.t_start() == ts
+                    ]
+                )
 
-                print('Saving {0} waveform'.format(rec_label))
+                print("Saving {0} waveform".format(rec_label))
                 hola.save_bids_json(rec_fName)
                 hola.save_bids_data(rec_fName)
 
-        print('')
+        print("")
 
     def digitize_trigger(self, ignore_values=None):
         """
@@ -430,29 +478,29 @@ class PhysioData(object):
         counts, bin_edges = np.histogram(
             tmp[~np.isnan(tmp)],
             bins=10,
-            range=[min(trig_physiosignal.signal), max(trig_physiosignal.signal)]
+            range=[min(trig_physiosignal.signal), max(trig_physiosignal.signal)],
         )
 
         # find the middle values of the two bins with the most counts, we
         # consider these two bins to contain the low a and high trigger values
-        first_bin = bin_edges[np.argmax(counts)] + (bin_edges[1]-bin_edges[0])/2
-        counts[np.argmax(counts)]=0
-        second_bin = bin_edges[np.argmax(counts)] + (bin_edges[1]-bin_edges[0])/2
+        first_bin = bin_edges[np.argmax(counts)] + (bin_edges[1] - bin_edges[0]) / 2
+        counts[np.argmax(counts)] = 0
+        second_bin = bin_edges[np.argmax(counts)] + (bin_edges[1] - bin_edges[0]) / 2
 
         # define the cuttoff threshold as the mean value between the low and
         # high values (the middle of the corresponding bins), and convert the
         # high states to 1s and the low states to 0s
-        threshold = (first_bin + second_bin)/2
+        threshold = (first_bin + second_bin) / 2
 
         # digitize
         tmp_signal = tmp
-        tmp_signal[tmp<threshold] = 0
-        tmp_signal[tmp>threshold] = 1
+        tmp_signal[tmp < threshold] = 0
+        tmp_signal[tmp > threshold] = 1
         tmp_signal[np.isnan(tmp)] = 0
 
         # assign the digitized trigger signal back to the physiosignal object
         trig_physiosignal.signal = tmp_signal.tolist()
-        self.signals[ self.labels().index('trigger') ] = trig_physiosignal
+        self.signals[self.labels().index("trigger")] = trig_physiosignal
 
     def get_trigger_timing(self):
         """
@@ -472,7 +520,7 @@ class PhysioData(object):
                 return None
 
         # get indices for which the trigger was on (>0):
-        trig_indices = np.where(np.array(trig_physiosignal.signal)>0)
+        trig_indices = np.where(np.array(trig_physiosignal.signal) > 0)
 
         # to extract more than one element from the list of sampling times,
         #   we convert it to a numpy array and pass the trig_indices:
@@ -505,10 +553,10 @@ class PhysioData(object):
             # for this instance of the class. If neither of them is
             # present, return an error:
             if not self.bidsPrefix:
-                raise Exception('fileName was not a known provided')
+                raise Exception("fileName was not a known provided")
 
         # Sanity check: make sure we have a "trigger" signal
-        if 'trigger' not in self.labels():
+        if "trigger" not in self.labels():
             print("We cannot save with trigger because we found no trigger.")
             self.save_to_bids()
             return
@@ -521,45 +569,51 @@ class PhysioData(object):
         # find the unique pairs of sampling rate and t_start (and indices),
         #   excluding the "trigger" signal (since we'll be interpolating the
         #   trigger to the other signals, if it has different sampling):
-        labels_no_trigger = [l for l in self.labels() if not l.lower() == 'trigger']
+        labels_no_trigger = [l for l in self.labels() if not l.lower() == "trigger"]
         unique_sr_ts, idx_un = np.unique(
-            [[s.samples_per_second,s.t_start()] for s in self.signals if not s.label.lower() == 'trigger'],
+            [
+                [s.samples_per_second, s.t_start()]
+                for s in self.signals
+                if not s.label.lower() == "trigger"
+            ],
             axis=0,
-            return_index=True
+            return_index=True,
         )
-        print('')
+        print("")
 
-        for idx, [sr,ts] in enumerate( unique_sr_ts ):
+        for idx, [sr, ts] in enumerate(unique_sr_ts):
 
             ###   Get filename   ###
-            if hasattr(self, 'RecordedEye'):
-                #eyetracking case
-                rec_fName = '{0}_recording-eyetracking_physio'.format(self.bidsPrefix)
-                print('Saving eyetracking physio data')
+            if hasattr(self, "RecordedEye"):
+                # eyetracking case
+                rec_fName = "{0}_eyetrack".format(self.bidsPrefix)
+                print("Saving eyetracking physio data")
                 self.save_bids_json(rec_fName)
                 self.save_bids_data(rec_fName)
-            
+
             elif len(unique_sr_ts) == 1:
                 # All the physio signals (except, potentially, the "trigger") have the
                 #   same sampling rate and t_start, there will be just one _physio file
                 #   and we don't need to add "_recording-":
                 rec_fName = self.bidsPrefix
-                print('Saving physio data')
+                print("Saving physio data")
 
             else:
                 rec_label = labels_no_trigger[idx_un[idx]]
-                rec_fName = '{0}_recording-{1}_physio'.format(self.bidsPrefix, rec_label)
-                print('Saving {0} waveform'.format(rec_label))
+                rec_fName = "{0}_recording-{1}_physio".format(
+                    self.bidsPrefix, rec_label
+                )
+                print("Saving {0} waveform".format(rec_label))
 
             ###   Create group of signals to save   ###
 
             # Now, create a new PhysioData object with the signals for this sampling
             #   rate and t_start as the rest of the signals:
             physiodata_group = PhysioData(
-                [ s for s in self.signals if (
-                    s.samples_per_second == sr and
-                    s.t_start() == ts
-                  )
+                [
+                    s
+                    for s in self.signals
+                    if (s.samples_per_second == sr and s.t_start() == ts)
                 ]
             )
 
@@ -568,24 +622,26 @@ class PhysioData(object):
             #   If it does, the "trigger" signal has been already included in physiodata_group.
             #   If not, we need to create a new trigger signal interpolated to the sampling
             #   rate and t_start of this group:
-            if not (trig_physiosignal.samples_per_second == sr and
-                    trig_physiosignal.t_start()          == ts):
+            if not (
+                trig_physiosignal.samples_per_second == sr
+                and trig_physiosignal.t_start() == ts
+            ):
 
                 trigger_for_this_group = PhysioSignal.matching_trigger_signal(
                     physiodata_group.signals[0],
-                    physiodata_group.signals[0].calculate_trigger_events(t_trig)
+                    physiodata_group.signals[0].calculate_trigger_events(t_trig),
                 )
 
                 # Append this new signal to "physiodata_group":
-                physiodata_group.append_signal( trigger_for_this_group )
-                    
+                physiodata_group.append_signal(trigger_for_this_group)
+
             # If the original PhysioData object had a "RecordedEye" attribute, add it to the new PhysioData object
-            if hasattr(self, 'RecordedEye'):
-                setattr(physiodata_group, 'RecordedEye', self.RecordedEye)
+            if hasattr(self, "RecordedEye"):
+                setattr(physiodata_group, "RecordedEye", self.RecordedEye)
 
             ###   Save the data   ###
 
             physiodata_group.save_bids_json(rec_fName)
             physiodata_group.save_bids_data(rec_fName)
 
-        print('')
+        print("")

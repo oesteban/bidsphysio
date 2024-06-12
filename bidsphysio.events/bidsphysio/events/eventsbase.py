@@ -87,10 +87,10 @@ class EventData(object):
         """
 
         # make sure the file name ends with "_events.json" by removing it (if present)
-        #   and adding it back:
+        #   and not adding it back:
         for myStr in ['.json','_events']:
             json_fName = json_fName[:-len(myStr)] if json_fName.endswith( myStr ) else json_fName
-        json_fName = json_fName + '_events.json'
+        
 
         with open( json_fName, 'w') as f:
             json.dump({
@@ -119,8 +119,9 @@ class EventData(object):
         for myStr in ['.gz','.tsv','_bold','_events']:
             if data_fName.endswith( myStr ):
                 data_fName = data_fName[:-len(myStr)]
+        data_fName = data_fName + '.tsv'
         
-        data_fName = data_fName + '_events.tsv'
+        
 
         # Save the data:
         myFmt=[]
